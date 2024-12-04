@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collision Detection Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            background-image: url('hintergrundbild1.jpg');
+            background-size: cover;
+            border: 2px solid #fff;
+        }
+        #ui {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 10px;
+        }
+        #ui p {
+            color: #fff;
+            margin: 5px;
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            width: 60px;
+            height: 60px;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+            background-color: #555;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px #333;
+            cursor: pointer;
+        }
+        button:active {
+            box-shadow: 0 2px #222;
+            transform: translateY(2px);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <p id="timer">Time: 0.0 s</p>
+        <p id="record">Record: 0.0 s</p>
+        <div id="controls">
+            <button id="up">↑</button>
+        </div>
+        <div>
+            <button id="left">←</button>
+            <button id="down">↓</button>
+            <button id="right">→</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+
+        // Touch-Start-Event
+        canvas.addEventListener("touchstart", (e) => {
+            e.preventDefault(); // Verhindert unerwünschtes Scrollen
+            const touch = e.touches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+        });
+
+        // Touch-End-Event
+        canvas.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            touchEndX = e.changedTouches[0].clientX;
+            touchEndY = e.changedTouches[0].clientY;
+
+            handleSwipe();
+        });
+
+        // Swipe-Handling-Funktion
+        function handleSwipe() {
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+
+            // Prüfen, ob der Swipe horizontal oder vertikal ist
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontaler Swipe
+                if (dx > 0) {
+                    // Nach rechts
+                    keys['right'] = true;
+                    setTimeout(() => keys['right'] = false, 100);
+                } else {
+                    // Nach links
+                    keys['left'] = true;
+                    setTimeout(() => keys['left'] = false, 100);
+                }
+            } else {
+                // Vertikaler Swipe
+                if (dy > 0) {
+                    // Nach unten
+                    keys['down'] = true;
+                    setTimeout(() => keys['down'] = false, 100);
+                } else {
+                    // Nach oben
+                    keys['up'] = true;
+                    setTimeout(() => keys['up'] = false, 100);
+                }
+            }
+        }
+
+        const ctx = canvas.getContext('2d');
+
+        // Adjust canvas for responsive size
+        const canvasSize = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+
+        // Game variables
+        const speed = 5; // Increased speed
+        const playerSize = canvasSize * 0.025;
+        let player = { x: canvasSize * 0.07, y: canvasSize * 0.07, width: playerSize, height: playerSize };
+        let winPoint = { x: canvasSize * 0.07, y: canvasSize * 0.87, width: playerSize * 2.5, height: playerSize * 2.5 };
+        let walls = [
+            { x: 0, y: 0, width: canvasSize, height: canvasSize * 0.05 },
+            { x: 0, y: 0, width: canvasSize * 0.05, height: canvasSize },
+            { x: canvasSize * 0.95, y: 0, width: canvasSize * 0.05, height: canvasSize },
+            { x: 0, y: canvasSize * 0.95, width: canvasSize, height: canvasSize * 0.05 },
+            { x: 0, y: canvasSize * 0.15, width: canvasSize * 0.85, height: canvasSize * 0.05 },
+            { x: canvasSize * 0.15, y: canvasSize * 0.3, width: canvasSize * 0.85, height: canvasSize * 0.05 },
+            { x: 0, y: canvasSize * 0.45, width: canvasSize * 0.85, height: canvasSize * 0.05 },
+            { x: canvasSize * 0.15, y: canvasSize * 0.6, width: canvasSize * 0.85, height: canvasSize * 0.05 },
+            { x: 0, y: canvasSize * 0.75, width: canvasSize * 0.85, height: canvasSize * 0.05 },
+        ];
+        let startTime, elapsedTime = 0;
+        let record = parseFloat(localStorage.getItem('record')) || Infinity;
+
+        let keys = {};
+
+        // Touch controls
+        const buttons = {
+            up: document.getElementById('up'),
+            down: document.getElementById('down'),
+            left: document.getElementById('left'),
+            right: document.getElementById('right'),
+        };
+
+        function drawRect(rect, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+        }
+
+        function checkCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        function resetGame() {
+            player.x = canvasSize * 0.07;
+            player.y = canvasSize * 0.07;
+            startTime = Date.now();
+            elapsedTime = 0;
+
+            // Alle gedrückten Tasten zurücksetzen
+            keys = {};
+        }
+
+
+        function updateTimer() {
+            elapsedTime = (Date.now() - startTime) / 1000;
+            document.getElementById('timer').innerText = `Time: ${elapsedTime.toFixed(1)} s`;
+            document.getElementById('record').innerText = `Record: ${record === Infinity ? 'None' : record.toFixed(1)} s`;
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player, walls, and win point
+            drawRect(player, 'red');
+            drawRect(winPoint, 'green');
+            walls.forEach(wall => drawRect(wall, 'gray'));
+
+            // Update player movement
+            if (keys['ArrowRight'] || keys['right']) player.x += speed;
+            if (keys['ArrowLeft'] || keys['left']) player.x -= speed;
+            if (keys['ArrowUp'] || keys['up']) player.y -= speed;
+            if (keys['ArrowDown'] || keys['down']) player.y += speed;
+
+            // Boundary check
+            player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height - player.height, player.y));
+
+            // Check collisions
+            if (walls.some(wall => checkCollision(player, wall))) {
+                alert("Collision! You hit a wall.");
+                resetGame();
+            }
+
+            // Check win
+            if (checkCollision(player, winPoint)) {
+                if (elapsedTime < record) {
+                    record = elapsedTime;
+                    localStorage.setItem('record', record);
+                    alert(`New Record! Time: ${elapsedTime.toFixed(1)} s`);
+                } else {
+                    alert(`You won! Time: ${elapsedTime.toFixed(1)} s`);
+                }
+                resetGame();
+            }
+
+            updateTimer();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        window.addEventListener('keydown', (e) => keys[e.key] = true);
+        window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // Touch listeners
+        Object.keys(buttons).forEach(direction => {
+            buttons[direction].addEventListener('mousedown', () => keys[direction] = true);
+            buttons[direction].addEventListener('mouseup', () => keys[direction] = false);
+            buttons[direction].addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys[direction] = true;
+            });
+            buttons[direction].addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys[direction] = false;
+            });
+        });
+
+        // Start game
+        resetGame();
+        gameLoop();
+    </script>
+</body>
+</html>
